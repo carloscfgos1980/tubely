@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -58,6 +59,10 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	base64Encoded := base64.StdEncoding.EncodeToString(data)
+
+	base64DataURL := fmt.Sprintf("data:%s;base64,%s", mediaType, base64Encoded)
+
 	// Verify that the video exists and belongs to the user
 	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
@@ -69,15 +74,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Store the thumbnail in memory (replace with S3 upload in production)
-	videoThumbnails[videoID] = thumbnail{
-		data:      data,
-		mediaType: mediaType,
-	}
-
-	ThumbnailURL := fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", cfg.port, videoID)
-
-	video.ThumbnailURL = &ThumbnailURL
+	video.ThumbnailURL = &base64DataURL
 	video.UpdatedAt = time.Now()
 
 	err = cfg.db.UpdateVideo(video)
