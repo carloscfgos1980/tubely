@@ -234,3 +234,29 @@ Update the thumbnail_url. Notice that in main.go we have a file server that serv
 <http://localhost>:<port>/assets/<videoID>.<file_extension>
 
 Restart the server and re-upload the boots-image-horizontal.png thumbnail image to ensure it's working. You should see it in the UI as well as a copy in the /assets directory.
+
+# 1.8 Mime Types
+
+There are an infinite number of things we could consider "large files". But within the context of web development, the most common types of large files are probably:
+
+Images: PNGs, JPEGs, GIFs, SVGs, etc.
+Videos: MP4s, MOVs, AVIs, etc.
+Audio: MP3s, WAVs, etc.
+Static web templates: HTML, CSS, JS, etc.
+Administrative files: PDFs, Word docs, etc.
+A mime type is just a web-friendly way to describe format of a file. It's kind of like a file extension, but more standardized and built for the web.
+
+Mime types have a type and a subtype, separated by a /. For example:
+
+image/png
+video/mp4
+audio/mp3
+text/html
+When a browser uploads a file via a multipart form, it sends the file's mime type in the Content-Type header.
+
+Assignment
+Up until now we've allowed any file type to be uploaded as a thumbnail... let's fix that.
+
+Use the mime.ParseMediaType function to get the media type from the Content-Type header
+If the media type isn't either image/jpeg or image/png, respond with an error (respondWithError helper)
+Try to upload the PDF file "is-bootdev-for-you.pdf" as a thumbnail - you should get an error
