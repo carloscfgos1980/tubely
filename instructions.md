@@ -211,3 +211,26 @@ data:<media-type>;base64,<data>
 Store the URL in the thumbnail_url column in the database.
 Because the thumbnail_url has all the data we need, delete the global thumbnail map and the GET route for thumbnails.
 Restart the server and re-upload the boots-image-horizontal.png thumbnail image to ensure it's working.
+
+# 1.7 Using the Filesystem
+
+Great, now we're using base64 strings in our SQLite database to store images... let's talk about why that actually kinda sucks.
+
+CPU performance: Base64 encoding is an expensive CPU-intensive operation. If we have a lot of uploads (I mean, we're planning on being a successful company, right?), we'll have some scaling issues.
+Storage costs: Base64 encoding bloats the size of the image data. We're using more disk space than we need to, which again, is expensive and slow.
+Database performance: Databases (especially relational databases like SQLite, Postgres and MySQL) are optimized for small, structured data, not giant blobs of binary. It will impact query performance in a non-trivial way.
+Caching: Base64 encoded images aren't as cache friendly as raw files, meaning slower load times and higher bandwidth costs.
+It's usually a bad idea to store large binary blobs in a database, there are exceptions, but they are rare. So what's the solution? Store the files on the file system. File systems are optimized for storing and serving files, and they do it well.
+
+Assignment
+Let's update our handler to store the files on the file system. We'll save uploaded files to the /assets directory on disk.
+
+Instead of encoding to base64, update the handler to save the bytes to a file at the path /assets/<videoID>.<file_extension>.
+Use the Content-Type header to determine the file extension.
+Use the videoID to create a unique file path. filepath.Join and cfg.assetsRoot will be helpful here.
+Use os.Create to create the new file
+Copy the contents from the multipart.File to the new file on disk using io.Copy
+Update the thumbnail_url. Notice that in main.go we have a file server that serves files from the /assets directory. The URL for the thumbnail should now be:
+<http://localhost>:<port>/assets/<videoID>.<file_extension>
+
+Restart the server and re-upload the boots-image-horizontal.png thumbnail image to ensure it's working. You should see it in the UI as well as a copy in the /assets directory.
