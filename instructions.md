@@ -260,3 +260,192 @@ Up until now we've allowed any file type to be uploaded as a thumbnail... let's 
 Use the mime.ParseMediaType function to get the media type from the Content-Type header
 If the media type isn't either image/jpeg or image/png, respond with an error (respondWithError helper)
 Try to upload the PDF file "is-bootdev-for-you.pdf" as a thumbnail - you should get an error
+
+# 1.9 Live Edits
+
+With Tubely, we have it easy. Users won't be able to make small tweaks to existing images and videos - like changing the background color or adding a text overlay.
+
+We'll force them to simply upload new versions of the file (even YouTube has this restriction, even with their resources).
+
+If a user were able to live edit a file (think Google Docs or Canva) we'd have to approach our storage problem differently. We wouldn't just be managing new versions of "static" files, we would need to handle every tiny edit (keystroke) and sync updated changes to our server. That's much more complicated and outside the scope of this course.
+
+Luckily, those requirements are also less common in the real world. The Tubely use case (storing and serving entire assets) is much more common and much easier to implement.
+
+# 2.1 Caching
+
+Tubely is a web application. It's accessed through a browser and browsers love to cache stuff. They love cache more than Scrooge McDuck.
+
+I'll see myself out.
+"Cache" is just a fancy word for "temporary storage". When a user visits a web application for the first time, their browser downloads all the files required to display the page: HTML, CSS, JS, images, videos, etc. It then "caches" (stores) them on the user's machine so that next time they come back, it doesn't need to re-download everything. It can use the locally stored copies.
+
+Assignment
+Run the server and open the app. Your video should already have the boots-image-horizontal.png uploaded, and you should be able to see it in the web page
+On the same video, upload the boots-image-vertical.png image instead.
+Refresh the browser
+
+# 2.2 Caching
+
+Tubely is a web application. It's accessed through a browser and browsers love to cache stuff. They love cache more than Scrooge McDuck.
+
+I'll see myself out.
+"Cache" is just a fancy word for "temporary storage". When a user visits a web application for the first time, their browser downloads all the files required to display the page: HTML, CSS, JS, images, videos, etc. It then "caches" (stores) them on the user's machine so that next time they come back, it doesn't need to re-download everything. It can use the locally stored copies.
+
+Assignment
+Run the server and open the app. Your video should already have the boots-image-horizontal.png uploaded, and you should be able to see it in the web page
+On the same video, upload the boots-image-vertical.png image instead.
+Refresh the browser
+
+
+Cache Busting
+Click to hide video
+
+Browsers cache stuff for good reason: it makes the user experience snappier and, if the user is paying for data, cheaper.
+
+That said, sometimes (like in the last lesson) we don't want the browser to cache a file - we want to be sure we have the latest version. One trick to ensure that we get the latest is by "busting the cache". A simple tactic is to change the URL of the file a bit. Say we have this image URL:
+
+<http://localhost:8080/image.jpg>
+
+To cache bust, we want to alter the URL so that:
+
+The browser thinks it's a different file
+The server thinks it's the same file
+Servers typically ignore query strings for file-like assets, so one of the most common ways to cache bust from the client side is to just add one. For example, a version parameter like this:
+
+<http://localhost:8080/image.jpg?version=1>
+
+If we want to bust it again, we just increment the version:
+
+<http://localhost:8080/image.jpg?version=2>
+
+Our use of the version key and the 1 and 2 values are arbitrary. The important thing is that the URL is different.
+
+Assignment
+We won't do much with the front-end of Tubely in this course, but this one lesson is an exception.
+
+Open app/app.js and take a look at the viewVideo function. Find this line:
+thumbnailImg.src = video.thumbnail_url;
+
+This is where we tell the browser which URL to load the thumbnail image from. Because the URL doesn't change when we upload a new thumbnail, let's add client-side cache busting.
+
+Update the above line of code to instead append a query string with this format:
+ORIGINAL_URL?v=TIME
+
+Where ORIGINAL_URL is the original URL and TIME is the current time in milliseconds. You can get the current time in milliseconds with Date.now(). You can also use string interpolation in JS like this:
+
+message = `She is ${age} years old`;
+
+Restart the application, and try switching back and forth between the two thumbnails. You should see the new thumbnail immediately after uploading!
+Run and submit the CLI tests from the root of the repo.
+
+You may have to hard refresh and clear your browser's cache to see the changes in app.js
+The tests for this step are a bit odd, they're checking your app.js to just make sure that you're not doing the old thing. Don't cheat please and thanks.
+
+
+Cache Headers
+Query strings are a great way to brute force cache controls as the client - but the best way (assuming you have control of the server, and c'mon, we're backend devs), is to use the Cache-Control header. Some common values are:
+
+no-store: Don't cache this at all
+max-age=3600: Cache this for 1 hour (3600 seconds)
+stale-while-revalidate: Serve stale content while revalidating the cache
+no-cache: Does not mean "don't cache this". It means "cache this, but revalidate it before serving it again"
+The fact that no-cache means "lol jk you can actually cache this just check with me first" makes me feel some sort of way
+You can view all the other options here if you're interested.
+
+When the server sends Cache-Control headers, it's up to the browser to respect them, but most modern browsers do.
+
+Assignment
+Let's do things the right way and control caching with headers from the server.
+
+Edit app.js and revert it back to the way it was, just setting thumbnailImg.src = video.thumbnail_url; in the viewVideo function.
+In cache.go rename the cacheMiddleware function to noCacheMiddleware (it will be more descriptive now)
+Update the noCacheMiddleware function. It should set the Cache-Control header to no-store before handling the request.
+Restart the application, and try switching back and forth between the two thumbnails. You should see the new thumbnail immediately after uploading, even without client side cache busting!
+
+
+# 2.3 Cache Busting
+
+Click to hide video
+
+Browsers cache stuff for good reason: it makes the user experience snappier and, if the user is paying for data, cheaper.
+
+That said, sometimes (like in the last lesson) we don't want the browser to cache a file - we want to be sure we have the latest version. One trick to ensure that we get the latest is by "busting the cache". A simple tactic is to change the URL of the file a bit. Say we have this image URL:
+
+<http://localhost:8080/image.jpg>
+
+To cache bust, we want to alter the URL so that:
+
+The browser thinks it's a different file
+The server thinks it's the same file
+Servers typically ignore query strings for file-like assets, so one of the most common ways to cache bust from the client side is to just add one. For example, a version parameter like this:
+
+<http://localhost:8080/image.jpg?version=1>
+
+If we want to bust it again, we just increment the version:
+
+<http://localhost:8080/image.jpg?version=2>
+
+Our use of the version key and the 1 and 2 values are arbitrary. The important thing is that the URL is different.
+
+Assignment
+We won't do much with the front-end of Tubely in this course, but this one lesson is an exception.
+
+Open app/app.js and take a look at the viewVideo function. Find this line:
+thumbnailImg.src = video.thumbnail_url;
+
+This is where we tell the browser which URL to load the thumbnail image from. Because the URL doesn't change when we upload a new thumbnail, let's add client-side cache busting.
+
+Update the above line of code to instead append a query string with this format:
+ORIGINAL_URL?v=TIME
+
+Where ORIGINAL_URL is the original URL and TIME is the current time in milliseconds. You can get the current time in milliseconds with Date.now(). You can also use string interpolation in JS like this:
+
+message = `She is ${age} years old`;
+
+Restart the application, and try switching back and forth between the two thumbnails. You should see the new thumbnail immediately after uploading!
+Run and submit the CLI tests from the root of the repo.
+
+You may have to hard refresh and clear your browser's cache to see the changes in app.js
+The tests for this step are a bit odd, they're checking your app.js to just make sure that you're not doing the old thing. Don't cheat please and thanks.
+
+
+# 2.4 Cache Headers
+
+Query strings are a great way to brute force cache controls as the client - but the best way (assuming you have control of the server, and c'mon, we're backend devs), is to use the Cache-Control header. Some common values are:
+
+no-store: Don't cache this at all
+max-age=3600: Cache this for 1 hour (3600 seconds)
+stale-while-revalidate: Serve stale content while revalidating the cache
+no-cache: Does not mean "don't cache this". It means "cache this, but revalidate it before serving it again"
+The fact that no-cache means "lol jk you can actually cache this just check with me first" makes me feel some sort of way
+You can view all the other options here if you're interested.
+
+When the server sends Cache-Control headers, it's up to the browser to respect them, but most modern browsers do.
+
+Assignment
+Let's do things the right way and control caching with headers from the server.
+
+Edit app.js and revert it back to the way it was, just setting thumbnailImg.src = video.thumbnail_url; in the viewVideo function.
+In cache.go rename the cacheMiddleware function to noCacheMiddleware (it will be more descriptive now)
+Update the noCacheMiddleware function. It should set the Cache-Control header to no-store before handling the request.
+Restart the application, and try switching back and forth between the two thumbnails. You should see the new thumbnail immediately after uploading, even without client side cache busting!
+
+# 2.5 New Files
+
+"Stale" files are a common problem in web development. And when your app is small, the performance benefits of aggressively caching files might not be worth the complexity and potential bugs that can crop up from not handling cache behavior correctly. After all, the famous quote goes:
+
+There are only two hard things in Computer Science: cache invalidation, naming things, and off-by-one errors.
+That said, there is one more strategy I want to cover. It's my personal favorite for apps like Tubely.
+
+In Tubely, we just don't care about old versions of thumbnails. Like ever. So let's just give each new thumbnail version a completely new URL (and path on the filesystem). That way, we can avoid all potential caching issues completely.
+
+It's not that caching is bad generally (it's incredibly useful for many performance-related issues), but we know we don't need it for this part of this app.
+
+Assignment
+One final cache update! Each time a new thumbnail is uploaded, we'll give it a new path on disk (and by extension, a new URL). This way, we can avoid all caching issues completely.
+
+Update the handlerUploadThumbnail function.
+Instead of using the videoID to create the file path, use crypto/rand.Read to fill a 32-byte slice with random bytes. Use base64.RawURLEncoding to then convert it into a random base64 string. Use this string as the file name, and set the extension based on the media type (same as before). For example:
+
+QmFzZTY0U3RyaW5nRXhhbXBsZQ.png
+
+Test the new functionality by swapping back and forth between two different thumbnail images. Right click on the images in the browser, and use "inspect element" to make sure that the URL changes each time you upload a new thumbnail.

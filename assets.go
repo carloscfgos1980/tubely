@@ -1,11 +1,10 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/google/uuid"
 )
 
 func (cfg apiConfig) ensureAssetsDir() error {
@@ -23,7 +22,10 @@ func (cfg *apiConfig) getAssetDiskPath(assetPath string) string {
 	return filepath.Join(cfg.assetsRoot, assetPath)
 }
 
-func getAssetPath(videoID uuid.UUID, mediaType string) string {
+func getAssetPath(mediaType string) string {
+	// generate a random file name
+	mySlice := make([]byte, 32)
+	name := base64.RawURLEncoding.EncodeToString(mySlice)
 
 	extension := map[string]string{
 		"image/jpeg": ".jpg",
@@ -32,7 +34,7 @@ func getAssetPath(videoID uuid.UUID, mediaType string) string {
 	}
 
 	ext := extension[mediaType]
-	return fmt.Sprintf("%s%s", videoID, ext)
+	return fmt.Sprintf("%s%s", name, ext)
 }
 
 // another way to get the extention:
