@@ -449,3 +449,138 @@ Instead of using the videoID to create the file path, use crypto/rand.Read to fi
 QmFzZTY0U3RyaW5nRXhhbXBsZQ.png
 
 Test the new functionality by swapping back and forth between two different thumbnail images. Right click on the images in the browser, and use "inspect element" to make sure that the URL changes each time you upload a new thumbnail.
+
+# 3.1 Single Machine
+
+I promised you AWS S3, and you're gonna get it. But first, let's understand why S3 being "serverless" is kind of a big deal.
+
+In a "simple" web application architecture, your server is likely a single machine running in the cloud. That single machine probably runs:
+
+An HTTP server that handles the incoming requests
+A database running in the background that the HTTP server talks to
+A file system the server uses to directly read and write larger files
+
+All on one machine.
+
+What's Wrong With This?
+Well, not much. Honestly this is a perfectly valid way to build a web application, even in production. That said, there are some trade-offs:
+
+Scaling: If your app gets popular, you'll need to "scale" your single machine (add more resources like CPU/RAM/Disk space). A single computer can only become so powerful.
+Availability: If your server goes down, your app goes down. To be fair, you can mitigate this with load balancers and multiple servers.
+Durability: If your server crashes, or an intern rm -rf's something, you're in trouble. You might have backups, but let's be honest, you probably don't.
+Cost: Running a server 24/7 means paying 24/7. It can be nice to only pay for what you use.
+Maintenance: You have to manage everything yourself. You'll be responsible for "ops" tasks like backups, monitoring, logging, version upgrades, etc.
+
+
+# 3.2 AWS
+
+AWS (Amazon Web Services) is one of the (at least in my mind) "Big Three" cloud providers. The other two are Google Cloud and Microsoft Azure.
+
+AWS is the oldest, largest, and most popular of the three, generally speaking.
+
+Security best practice: Only use your AWS account's root user to perform a few account and service management tasks. Do NOT use the root user for everyday tasks. After you create your account, secure the root user with a strong password and enable multi-factor authentication (2FA) on it.
+For all day-to-day administrative work, create a new IAM user with admin permissions. This will help keep your account secure.
+Assignment
+Let's get you up and running with AWS.
+
+Create an AWS account (if you don't already have one)
+Go to AWS
+Create an Account
+Select "personal" account
+Fill out the form
+Add billing info: You won't be charged if you stay within the free tier, which is all you'll need for this course - a $1 hold will be placed on your card to verify it's real, but it will be refunded in a few days
+Verify phone number
+Use the free support plan
+Create an IAM user
+Create an iam user in the AWS console
+Name it after you
+No need for console access
+Make a new managers user group with full admin access and attach the user to it
+Create the user
+Install the AWS CLI version 2
+Authorize the IAM user through the CLI
+Select the user and click "create access key"
+Select "CLI" and ignore the recommendations
+Leave tag value blank
+Run aws configure
+Enter the access key and secret key
+Leave region/format blank
+No need to download the keys.
+Verify CLI sign in with aws sts get-caller-identity
+cat ~/.aws/credentials to see the keys
+
+
+# 3.3 Serverless
+
+Click to hide video
+
+"Serverless" is an architecture (and let's be honest, a buzzword) that refers to a system where you don't have to manage the servers on your own.
+
+Serverless is largely misunderstood due to the dubious naming. It does not mean there are no servers, it just means they're someone else's problem.
+You'll often see "Serverless" used to describe services like AWS Lambda, Google Cloud Functions, and Azure Functions. And that's true, but it refers to "serverless" in its most "pure" form: serverless compute.
+
+AWS S3 was actually one of the first "serverless" services, and is arguably still the most popular. It's not serverless compute, it's serverless storage. You don't have to manage/scale/secure the servers that store your files, AWS does that for you.
+
+Instead of going to a local file system, your server makes network requests to the S3 API to read and write files.
+
+Assignment
+Make a S3 bucket through the AWS console called tubely-<random_number>. Replace <random_number> with a "random" (just choose one) number to the end of the bucket name to ensure it's unique. For example, tubely-56841, but choose your own number.
+The bucket name has to be tubely-<random_number> to pass the tests.
+Uncheck "Block all public access" when creating the bucket.
+Leave bucket versioning off.
+Leave default encryption on with managed keys.
+Leave object lock disabled.
+Use the AWS CLI to ensure the bucket is there.
+
+aws s3 ls
+
+Now that we have a bucket, we still need to configure its permissions to control who can access the files and how, typically through a bucket policy or object-level ACLs.
+
+Go to your bucket and configure the bucket policy (under the "Permissions" tab). Copy-paste the following, replacing BUCKET_NAME with your bucket.
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::BUCKET_NAME/*"
+    }
+  ]
+}
+
+This will give read-only access to anyone with the precise URL of an object. Notably, this doesn't allow listing the objects in the bucket, only reading them if you know the exact URL.
+
+# 3.4 Upload Object
+
+Now that you have a public bucket, let's add a file.
+
+Assignment
+Upload the boots-image-horizontal.png image file to your newly created bucket
+Use default settings
+Open the file in a browser using the file's URL to see it
+Use the aws CLI to check for the file and redirect the output to /tmp/bucket_contents.txt
+aws s3 ls BUCKET_NAME > /tmp/bucket_contents.txt
+
+Replace BUCKET_NAME with the name of your bucket
+
+cat the file to make sure you can see your file
+cat /tmp/bucket_contents.txt
+
+
+# 3.5 Architecture
+
+S3 is really simple.
+
+Honestly idk why you even bought this course...
+File A goes in bucket B at key C. That's it. You only need 2 things to access an object in S3:
+
+The bucket name
+The object key
+
+Buckets have globally unique names because they are part of the URL used to access them. If I make a bucket called "bd-vids", you can't make a bucket called "bd-vids", even if you're in a separate AWS account. This makes it really easy to think about where your data lives.
+
+Assignment
+Try to make a bucket called bootdev. It won't work. Ha! I took that name first. A lot of organizations use a company specific prefix to ensure their bucket names are unique. For example, bootdev-user-images.
+
+
