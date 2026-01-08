@@ -584,3 +584,50 @@ Assignment
 Try to make a bucket called bootdev. It won't work. Ha! I took that name first. A lot of organizations use a company specific prefix to ensure their bucket names are unique. For example, bootdev-user-images.
 
 
+# 3.6 SDKs and S3
+
+An SDK or "Software Development Kit" is just a collection of tools (often involving an importable library) that helps you interact with a specific service or technology.
+
+AWS has official SDKs for most popular programming languages. They're usually the best way to interact with AWS services.
+
+Don't roll your own crypto, and don't roll your own AWS SDK.
+When you as a human interact with AWS resources, you'll typically use the web console (GUI) or the CLI. When your code interacts with AWS resources, you'll use the SDK within your code.
+
+Assignment
+You've escaped writing code for a while - this one will have you write a lot of code and might take a bit of time, that's okay!
+
+Install the AWS S3 Go SDK
+go get github.com/aws/aws-sdk-go-v2/service/s3 github.com/aws/aws-sdk-go-v2/config
+
+Configure an S3 client in main.go
+Add an s3Client field to apiConfig of type *s3.Client
+Use config.LoadDefaultConfig to auto load the default AWS SDK config (the keys you set with aws configure)
+As arguments, give it an empty Context and pass config.WithRegion(s3Region) to use the region that's set in your .env file.
+Create a client with your config using s3.NewFromConfig
+Assign the client to the s3Client field
+Update the S3_BUCKET and S3_REGION variables in your .env file. They'll be saved into your apiConfig.
+Complete the (currently empty) handlerUploadVideo handler to store video files in S3. Images will stay on the local file system for now. I recommend using the image upload handler as a reference.
+Set an upload limit of 1 GB (1 << 30 bytes) using http.MaxBytesReader.
+Extract the videoID from the URL path parameters and parse it as a UUID
+Authenticate the user to get a userID
+Get the video metadata from the database, if the user is not the video owner, return a http.StatusUnauthorized response
+Parse the uploaded video file from the form data
+Use (http.Request).FormFile with the key "video" to get a multipart.File in memory
+Remember to defer closing the file with (os.File).Close - we don't want any memory leaks
+Validate the uploaded file to ensure it's an MP4 video
+Use mime.ParseMediaType and "video/mp4" as the MIME type
+Save the uploaded file to a temporary file on disk.
+Use os.CreateTemp to create a temporary file. I passed in an empty string for the directory to use the system default, and the name "tubely-upload.mp4" (but you can use whatever you want)
+defer remove the temp file with os.Remove
+defer close the temp file (defer is LIFO, so it will close before the remove)
+io.Copy the contents over from the wire to the temp file
+Reset the tempFile's file pointer to the beginning with .Seek(0, io.SeekStart) - this will allow us to read the file again from the beginning
+Put the object into S3 using PutObject. You'll need to provide:
+The bucket name
+The file key. Use the same <random-32-byte-hex>.ext format as the key. e.g. 1a2b3c4d5e6f7890abcd1234ef567890.mp4
+The file contents (body). The temp file is an os.File which implements io.Reader
+Content type, which is the MIME type of the file.
+Update the VideoURL of the video record in the database with the S3 bucket and key. S3 URLs are in the format https://<bucket-name>.s3.<region>.amazonaws.com/<key>. Make sure you use the correct region and bucket name!
+Restart your server and test the handler by uploading the boots-video-vertical.mp4 file. Make sure that:
+The video is correctly uploaded to your S3 bucket.
+The video_url in your database is updated with the S3 bucket and key (and thus shows up in the web UI)
