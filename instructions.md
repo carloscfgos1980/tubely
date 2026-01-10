@@ -631,3 +631,48 @@ Update the VideoURL of the video record in the database with the S3 bucket and k
 Restart your server and test the handler by uploading the boots-video-vertical.mp4 file. Make sure that:
 The video is correctly uploaded to your S3 bucket.
 The video_url in your database is updated with the S3 bucket and key (and thus shows up in the web UI)
+
+
+# 4.1 Object Storage
+
+If you squint really hard, it feels like S3 is a file system in the cloud... but it's not. It's technically an object storage system - which is not quite the same thing.
+
+Click to hide video
+
+Traditional File Storage
+"File storage" is what you're already familiar with:
+
+Files are stored in a hierarchy of directories
+A file's system-level metadata (like timestamp and permissions) is managed by the file system, not the file itself
+File storage is great for single-machine-use (like your laptop), but it doesn't distribute well across many servers. It's optimized for low-latency access to a small number of files on a single machine.
+
+Object Storage
+Object storage is designed to be more scalable, available, and durable than file storage because it can be easily distributed across many machines:
+
+Objects are stored in a flat namespace (no directories)
+An object's metadata is stored with the object itself
+Assignment
+Open the video object we uploaded in the last lesson in the S3 console and look at the "Object overview" - you should see a bunch of metadata about the object:
+Size
+Type
+Entity tag
+etc.
+Use the AWS CLI to read the metadata of your uploaded vertical video object, and redirect the output to /tmp/object_metadata.txt
+aws s3api head-object --bucket BUCKET_NAME --key OBJECT_KEY > /tmp/object_metadata.txt
+
+Replace BUCKET_NAME and OBJECT_KEY with the name of your bucket and the key of your object
+
+
+
+aws s3api head-object --bucket tubely-2019 --key AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA.mp4 > /tmp/object_metadata.txt
+
+
+
+"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0dWJlbHktYWNjZXNzIiwic3ViIjoiOTlhMTQ1MWEtNzkwMC00ZmE3LTgwMjEtYmMwYTZhNDg2NTJjIiwiZXhwIjoxNzcwNjc0MDAxLCJpYXQiOjE3NjgwODIwMDF9.S22g5I-EbvrbZM9cnbJmWMCLA4Zb-WsSP7gZH0QgSeo"
+
+
+curl -s <http://localhost:8091/api/videos> \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0dWJlbHktYWNjZXNzIiwic3ViIjoiOTlhMTQ1MWEtNzkwMC00ZmE3LTgwMjEtYmMwYTZhNDg2NTJjIiwiZXhwIjoxNzcwNjc0MDAxLCJpYXQiOjE3NjgwODIwMDF9.S22g5I-EbvrbZM9cnbJmWMCLA4Zb-WsSP7gZH0QgSeo"
+
+
+

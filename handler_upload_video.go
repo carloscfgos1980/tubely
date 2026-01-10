@@ -2,6 +2,7 @@ package main
 
 import (
 	"io"
+	"log"
 	"mime"
 	"net/http"
 	"os"
@@ -94,8 +95,26 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Get video aspect ratio
+	videoAspectRatio, err := getVideoAspectRatio(tempFile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error getting video aspect ratio", err)
+		return
+	}
+
+	prefix := map[string]string{
+		"16:9":  "landscape/",
+		"9:16":  "portrait/",
+		"other": "other/",
+	}
+
+	videoPrefix := prefix[videoAspectRatio]
+
 	// Upload to S3
-	videoKey := getAssetPath(mediaType)
+	assetPath := getAssetPath(mediaType)
+
+	log.Println("Uploading video to S3 with aspect ratio:", videoAspectRatio, "at path:", videoPrefix+assetPath)
+	videoKey := videoPrefix + assetPath
 
 	_, err = cfg.s3Client.PutObject(
 		r.Context(),
