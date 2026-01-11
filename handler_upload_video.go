@@ -114,14 +114,30 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	assetPath := getAssetPath(mediaType)
 
 	log.Println("Uploading video to S3 with aspect ratio:", videoAspectRatio, "at path:", videoPrefix+assetPath)
-	videoKey := videoPrefix + assetPath
+	key := videoPrefix + assetPath
+
+	// Process video for fast start
+	outputFilePath, err := processVideoForFastStart(tempFile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error processing video", err)
+		return
+	}
+	defer os.Remove(outputFilePath)
+
+	// Open the processed file
+	processedFile, err := os.Open(outputFilePath)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error opening processed file", err)
+		return
+	}
+	defer processedFile.Close()
 
 	_, err = cfg.s3Client.PutObject(
 		r.Context(),
 		&s3.PutObjectInput{
 			Bucket:      aws.String(cfg.s3Bucket),
-			Key:         aws.String(videoKey),
-			Body:        tempFile,
+			Key:         aws.String(key),
+			Body:        processedFile,
 			ContentType: aws.String(mediaType),
 		},
 	)
@@ -130,7 +146,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Update video record with S3 URL
-	videoUrl := cfg.getVideoURL(videoKey)
+	videoUrl := cfg.getVideoURL(key)
 	video.VideoURL = &videoUrl
 
 	err = cfg.db.UpdateVideo(video)

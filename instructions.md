@@ -727,11 +727,11 @@ portrait (9:16 aspect ratio)
 other (everything else)
 Install ffmpeg (which will also install ffprobe):
 
-# mac
+ mac
 
 brew install ffmpeg
 
-# linux
+ linux
 
 sudo apt install ffmpeg
 
@@ -763,10 +763,113 @@ Title: "Boots Horizontal"
 Description: "A horizontal video of boots"
 Use the horizontal video (this one might take a bit to upload)
 
+# 5.1 Streaming
+
+Now that (almost) no one is on dial-up 256k modems, we typically don't worry about "streaming" smaller files like images.
+
+But giant audio files (like audio books), and especially large video files should be streamed rather than downloaded. At least if you want your user to be able to start consuming the content immediately.
+
+Click to hide video
+
+Streaming vs. Downloading
+Downloading is when you wait for the entire file to be transferred before you can start using it.
+Streaming is when you start using the file immediately while it's still being transferred in the background.
+The simplest way to stream a video file on the web (imo) is to take advantage of two things:
+
+The native HTML5 <video> element. It streams video files by default as long as the server supports it.
+The Range HTTP header. It allows the client to request specific byte ranges of a file, enabling partial downloads. S3 servers support it by default.
+Writing streaming from scratch is hard, but using the right tools makes it pretty easy these days.
+
+Assignment
+For this next part, Chrome or Firefox will work - I'm not sure about other browsers. Additionally, your numbers might be a bit different than mine, but should be in the same ballpark.
+
+Open Tubely, make sure you've still got your "horizontal" video uploaded. If you haven't noticed, it's a big one: 10 minutes long!
+Right click on the page and click "inspect" to open the developer tools. Go to the "network" tab and click "disable cache".
+With the dev tools network tab still open, refresh the page. You should see a few requests fire off
+Click on your horizontal video (which will add the <video> element to the page and request the file). You should, interestingly, see 3 requests:
+
+A 206 status code means "Partial Content" - that's because the browser is smart enough to realize that it should not download the entire 100MB+ video before starting to play it. It's downloading just enough to start playing the MP4 file.
+
+With the network tab still open, click the "play" button on the video element. It should start playing immediately, and likely fire off another partial content request to keep downloading more of the video in the background.
 
 
+# 5.2 MP4
+
+So why were there 3 requests for the video? Let's break each one down.
+
+First Request
+The first one is a GET request for the video file, and a Range header is included that says "Give me the bytes from 0 to the end of the file" (all of 'em).
+
+GET <https://tubely-66345.s3.us-east-2.amazonaws.com/landscape/fvV0PgksFF-ThNVOO_g8Dm8_zy8nZbT5pv1rsclfLhU.mp4>
+Range: bytes=0-
+
+The response is a 206 Partial Content and has a few headers:
+
+Content-Length: 148447946
+Content-Range: bytes 0-148447945/148447946
+
+In other words the entire file is 148447946 bytes, or about ~148MB, and this response returned the full range...
+
+...wait what??? Why is the "size" of the response only ~34kB if the entire file was returned??? That's only ~0.0002 of the file! Well, to be efficient, the browser stops downloading the response once it's had enough. It's the browser's trick to get just enough of the file to get started.
+
+Second Request
+The second request is another GET request to the same URL, but this time, the browser is specifying a more specific range of bytes to download:
+
+Range: bytes=146472960-
+
+And the response is another 206 with just a couple of megabytes in the body, and these headers:
+
+Content-Length 1974986
+Content-Range bytes 146472960-148447945/148447946
+
+The browser is downloading just the end of the file now... interesting...
+
+Third Request
+The last one is also a GET to the same URL, but this time with this range:
+
+bytes=32768-
+
+In other words, it's just getting a bit more from the start of the file.
+
+The moov Atom
+So what's the deal? Why not just start from the beginning? Why this jumping to the back of the file? Well, in a "traditional" mp4 file (as our current Boots videos are), the "moov" atom (which contains metadata about the video) is at the end of the file.
+
+But the client needs that metadata before it can start playing the video! So the browser is smartly poking around using Range requests to get that metadata as quickly as it can. We can speed up this process by pre-processing the video to have "fast start" encoding by moving the moov atom to the start.
+
+Assignment
+Update the server to pre-process uploaded videos so they always have "fast start" encoding.
+
+Ensure ffmpeg is installed and available in your PATH
+ffmpeg -version
+
+Create a new function called processVideoForFastStart(filePath string) (string, error) that takes a file path as input and creates and returns a new path to a file with "fast start" encoding. It should:
+Create a new string for the output file path. I just appended .processing to the input file (which should be the path to the temp file on disk)
+Create a new exec.Cmd using exec.Command
+The command is ffmpeg and the arguments are -i, the input file path, -c, copy, -movflags, faststart, -f, mp4 and the output file path.
+Run the command
+Return the output file path
+Update handlerUploadVideo to create a processed version of the video. Upload the processed video to S3, and discard the original.
+Delete all your other videos from your Tubely account, we don't need them.
+Create a new video called "Boots Horizontal Fast Start" with any old description and upload the horizontal video.
+Do the same thing as before: network tab -> disable cache -> refresh. Now you should only see 1 request to the start of the file instead of 3! Yay, small optimizations! (But more importantly, we understand what's going on now)
 
 
+# 5.3 More Requests
+
+HTTP requests for the .mp4 data aren't only made on the initial page load (duh).
+
+Go ahead and play the horizontal boots video, and keep the network tab open. You'll see more requests for partial content being made.
+
+Seek around the video a bit, for example, jump halfway through. You should see more requests being made to download the specific byte ranges of the video file.
+
+Range requests are pretty cool!
+
+# 5.4 Other Approaches
+
+Because we're mostly concerned with S3 and file storage in this course, we won't be doing a deep dive on all the file formats for video streaming. That said, I want to briefly cover a few of the most common ones, and point out when you might need to ditch a "plain" .mp4 file.
+
+Adaptive streaming: Standard mp4 files have a single resolution and bitrate. If a user's connection speed is unstable, HLS or MPEG-DASH allows for changing the quality of the stream on the fly. You may have noticed on YouTube or Netflix that your video quality changes based on your connection speed. Dropping to lower resolution is better than endlessly buffering.
+Live streaming: Standard mp4 files are not designed to be updated in real-time. You'd want to use a lower-latency protocol like WebRTC or RTMP for live streaming.
 
 
 
