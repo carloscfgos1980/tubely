@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"mime"
@@ -146,8 +147,9 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Update video record with S3 URL
-	videoUrl := cfg.getVideoURL(key)
-	video.VideoURL = &videoUrl
+	// videoUrl := cfg.getVideoURL(key)
+	url := fmt.Sprintf("%s,%s", cfg.s3Bucket, key)
+	video.VideoURL = &url
 
 	err = cfg.db.UpdateVideo(video)
 	if err != nil {
@@ -155,6 +157,13 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	video, err = cfg.dbVideoToSignedVideo(video)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error generating signed URL", err)
+		return
+	}
+
+	// Respond with updated video
 	respondWithJSON(w, http.StatusOK, video)
 
 }

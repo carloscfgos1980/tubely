@@ -876,3 +876,189 @@ Live streaming: Standard mp4 files are not designed to be updated in real-time. 
 
 
 
+aws s3 cp json.go s3://tubely-2019
+
+
+# 6.1 Security
+
+Click to hide video
+
+Cloud security is a giant can of worms. This isn't a security course, but I do want to give you a few pointers to keep you safe with a simple setup while using S3. A few things to think about:
+
+Who can access your bucket, and which parts of your bucket can they access?
+What actions can they take?
+How are they authenticated? And from where can they authenticate?
+At the moment, in your Tubely app:
+
+Your bucket is publicly accessible. Anyone can get any individual object in your bucket.
+Anyone can get the objects in your bucket, but only Tubely (and you) can change them or list them.
+Public readers aren't authenticated, but your code is authenticated with your AWS IAM access key.
+Keys Aren't Enough
+While it's great that an attacker would need to steal your AWS credentials to be able to maliciously change the contents of your bucket, relying only on the secrecy of keys is often not enough.
+
+Keys and passwords are compromised all the time.
+
+One way to add an additional layer of security is to ensure that your keys can only be used from certain (virtual) locations. Then an attacker would need your keys and to be on your network to gain access.
+
+Assignment
+Open the AWS IAM dashboard by clicking the link, or by searching "IAM" in the AWS console search bar.
+Go to the policies tab, and create a new policy.
+Set permissions to:
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "VisualEditor0",
+      "Effect": "Allow",
+      "Action": "*",
+      "Resource": "*",
+      "Condition": {
+        "IpAddress": {
+          "aws:SourceIp": "0.0.0.0/32"
+        }
+      }
+    }
+  ]
+}
+
+Call the policy manager-from-home
+Remove the admin policy from the managers group and add the manager-from-home policy. Because we set your user to be in the managers group, you should now have the new policy.
+Try to use the CLI to upload a file.
+aws s3 cp <local_file_path> s3://<bucket_name>
+
+You should get denied because your IP address is not allowed (your address isn't 0.0.0.0)
+
+Update the policy and replace 0.0.0.0 with your current IP address. (Keep the /32 at the end, it tells AWS that you want an exact match on the IP address)
+Try to upload a file again. Now it should work!
+
+# 6.2 Application vs. Developer
+
+With the new IP address firewall, your locally running Tubely app will only work if two conditions are met:
+
+The code has access to your AWS credentials (which grant full admin access)
+The code is running from your home IP address
+It's not a great idea to run your company's production system from your home network... but I also can't say I've never done it...
+The right thing to do in production is to have your code running on a dedicated server - not on your home desktop.
+
+Authenticating in Production
+Right now your Tubely code is authenticated as you. Like you personally. Remember how the keys you're using are your IAM keys?
+
+Let's pretend you're working on a large team of developers. Whose credentials should the actual production server use? Well... no one's! It should have its own identity. Not just that, but it should not have full admin access, it should just have the permissions it needs to do its job.
+
+# 6.3 Scoping Permission
+
+A critical rule of thumb in cyber security is the principle of least privilege: You should allow the fewest permissions possible that can still get the job done.
+
+For example, your user is in the "manager" group which we gave "full admin access" to. Especially at smaller companies, it's common for folks to have more permissions than they truly need, usually for the sake of speed and convenience.
+
+But that's not the most secure way to do things.
+
+Let's Pretend
+Let's just pretend that you are the engineering manager, that Tubely is a small company, and so it does make sense for your IAM user to have full admin access.
+
+Fine.
+
+But that doesn't mean we can't still scope down the permissions of the application itself.
+
+Assignment
+Create a new policy in the IAM center named tubely-s3
+Set permissions to:
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "VisualEditor0",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject",
+        "s3:ListBucket"
+      ],
+      "Resource": ["arn:aws:s3:::tubely-123456", "arn:aws:s3:::tubely-123456/*"]
+    }
+  ]
+}
+
+Replace tubely-123456 with your bucket name. You can get the Amazon Resource Name (ARN) of your bucket in the S3 console.
+
+Confirm it exists with the AWS CLI.
+aws iam list-policies --scope Local --no-cli-pager
+
+If --no-cli-pager doesn't work, it means you need to migrate to version 2 of the AWS CLI.
+
+# 6.5 Roles
+
+Now that we have a policy for the tubely app, we need a role to attach it to.
+
+Assignment
+Navigate to the roles section of the IAM console
+Create a new role called tubely-app
+Its trusted entity should be AWS service
+Its use case should be EC2
+Attach the tubely-s3 policy to it
+Now, we're not actually going to launch an EC2 instance (which is just Amazon's name for their basic virtual server) in this course. But the next step would be to simply launch an EC2 instance and attach the tubely-app role to it. Then the code running on that server would have the permissions defined in the tubely-s3 policy!
+
+# 6.6 Private Bucket
+
+Our tubely bucket is public (remember how we unchecked "Block all public access" in the bucket settings when we made it?).
+
+Public buckets are useful when you want to serve public content directly from them, like user profile pictures, for example. However, you should only use them when you're certain all the content should be public, and you're okay with the risks of anyone on the internet using the bandwidth you pay AWS for to download your assets over and over again...
+
+A good use case for a public bucket might be:
+
+Users' profile pictures
+Public certificates of completion (we do this for Boot.dev!)
+Dynamically generated images for social sharing (like the link previews you see on Twitter)
+While a private bucket might contain:
+
+A user's privately uploaded documents
+A user's draft content that they haven't published yet
+The org's video content that's only available to paying customers
+Assignment
+Create a new private bucket tubely-private-xxxxx (use a randomish number for xxxxx)
+Update the S3_BUCKET environment variable in your local tubely app to use your private bucket instead of the public one
+Delete any videos in your <admin@tubely.com> account - all their URLs will be broken now anyhow
+
+# 6.7 Signed URLs
+
+Presigned URLs are a way to give temporary access to a private object in S3. S3 will generate a URL (by attaching a cryptographic signature) that allows access to the object for a limited time. To be clear, it doesn't require the user to be logged in - it's just a URL that expires.
+
+The idea is that we'll generate these URLs with very short life spans, and then only give them to users who have already been authenticated by your application.
+
+Assignment
+Okay, so now that we've switched to a private bucket, we have a problem. Our code in that app's current state will generate URLs that simply put, won't work. Let's try it!
+
+Create a new video and upload the vertical video to it. The video player in the UI should sit there spinning forever in a broken state...
+Right click on the player and select "Copy video address". Open a new tab and paste the URL in the address bar. You should see a permissions error!
+<Message>Access Denied</Message>
+
+Let's use presigned URLs to fix it! Now, we're gonna do something a bit... hacky. There's no point in storing pre-signed URLs in the database, because they expire quickly. Instead, we'll use the video_url column to store the bucket and key of the video, then we'll use that to generate the presigned URL on the fly and respond with it on the API.
+
+Update the handlerUploadVideo handler code to store bucket and key as a comma delimited string in the video_url. E.g. tube-private-12345,portrait/vertical.mp4
+Create a new generatePresignedURL(s3Client *s3.Client, bucket, key string, expireTime time.Duration) (string, error) function.
+Use the SDK to create a s3.PresignClient with s3.NewPresignClient
+Use the client's .PresignGetObject() method with s3.WithPresignExpires as a functional option.
+Return the .URL field of the v4.PresignedHTTPRequest created by .PresignGetObject()
+Create a new (cfg*apiConfig) dbVideoToSignedVideo(video database.Video) (database.Video, error) method:
+It should take a video database.Video as input and return a database.Video with the VideoURL field set to a presigned URL and an error (to be returned from the handler)
+It should first split the video.VideoURL on the comma to get the bucket and key
+Then it should use generatePresignedURL to get a presigned URL for the video
+Set the VideoURL field of the video to the presigned URL and return the updated video
+Now whenever we return a video object over the wire, we need to first use the dbVideoToSignedVideo method to generate the presigned URL
+handlerUploadVideo should use it
+handlerVideoGet should use it
+handlerVideosRetrieve should use it
+Restart your server, and make sure you have a single video uploaded, it should be the vertical one. Make sure the video player works now!
+
+# 6.8 Encryption
+
+Although our S3 bucket is private (which means outsiders can't gain access to the files directly without credentials), it's still good for stuff to be encrypted. After all, what if a hacker physically walked into the data center to read our customers' secrets directly?
+
+At Rest
+Files in S3 are encrypted at rest ("at rest" just means "while they're sitting in storage on disk") by default. This was not always the case, but it is now! You don't need to do anything, the S3 service takes care of all of that for you. When you access S3 with your credentials, the service decrypts the files for you before handing them over.
+
+In Transit
+When you're uploading or downloading files from S3, how do you know that someone can't intercept the data as it travels through the internet? Well, when you access S3 via the web, you're using httpS. The S means that the data is encrypted as it travels between your computer and the S3 service.
+
+When you access S3 via the SDK (in your Go code), it also uses HTTPS by default. So as long as you don't go out of your way to disable encryption, you're good to go.

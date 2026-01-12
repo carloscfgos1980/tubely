@@ -1,10 +1,17 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
 )
 
 func (cfg apiConfig) ensureAssetsDir() error {
@@ -52,3 +59,48 @@ func getAssetPath(mediaType string) string {
 // 	}
 // 	return "." + parts[1]
 // }
+
+func (cfg *apiConfig) dbVideoToSignedVideo(video database.Video) (database.Video, error) {
+	var bucket, key string
+	url := video.VideoURL
+
+	if url == nil {
+		return video, nil
+	}
+
+	result := strings.Split(*url, ",")
+	if len(result) != 2 {
+		return video, nil
+	}
+
+	bucket = result[0]
+	key = result[1]
+
+	presignedURL, err := generatePresignedURL(cfg.s3Client, bucket, key, 15*time.Minute)
+	if err != nil {
+		return video, err
+	}
+
+	video.VideoURL = &presignedURL
+	return video, nil
+
+}
+
+func generatePresignedURL(s3Client *s3.Client, bucket, key string, expireTime time.Duration) (string, error) {
+	// Create a presign client
+	presignClient := s3.NewPresignClient(s3Client)
+
+	// Create the GetObject input
+	getObjectInput := &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	}
+
+	// Generate the presigned URL
+	presignedURL, err := presignClient.PresignGetObject(context.TODO(), getObjectInput, s3.WithPresignExpires(expireTime))
+	if err != nil {
+		return "", err
+	}
+
+	return presignedURL.URL, nil
+}
