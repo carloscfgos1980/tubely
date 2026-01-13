@@ -1062,3 +1062,109 @@ In Transit
 When you're uploading or downloading files from S3, how do you know that someone can't intercept the data as it travels through the internet? Well, when you access S3 via the web, you're using httpS. The S means that the data is encrypted as it travels between your computer and the S3 service.
 
 When you access S3 via the SDK (in your Go code), it also uses HTTPS by default. So as long as you don't go out of your way to disable encryption, you're good to go.
+
+
+## CDNs
+
+# 7.1 Regions
+
+A region is a geographic location where AWS has data centers. Data centers are clustered into "availability zones" (or "AZ" for acronym masochists enjoyers).
+
+By default, your S3 bucket is replicated across multiple availability zones in a single region. That said, there are options to automatically replicate your bucket's data across multiple regions. (We won't do that, but it's good to know about.)
+
+# 7.2 CDNs
+
+A Content Delivery Network (CDN) is a (typically global) network of servers that caches and delivers content to users based on their geographic location.
+
+When we give users a URL to an S3 object, they'll download that object from the S3 service in the region that our bucket lives in (for me, that's us-east-2, near Ohio in the USA).
+
+If a user in Australia tries to download that object, they're going to have to wait for the data to travel from Ohio to Australia... and that's a long way! A CDN, like AWS CloudFront, can help with that. It takes a static asset, like an image or video, and caches it on servers all over the world. When a user requests the asset, they get it from the server closest to them, which is much faster.
+
+In the example above, the "origin" server is an S3 bucket, and the "edge" servers are CloudFront servers. The origin is in the US, and whenever it updates, the edge servers update their caches. Then, when a user connects in Australia, they get the copy of the asset from the edge server in Australia. Much faster!
+
+Assignment
+Let's stand up a CloudFront distribution in front of our S3 bucket.
+
+Navigate to the CloudFront section of the AWS console and click "Create Distribution".
+Set the following options, leaving anything else as default:
+Under "Get Started", set the distribution name. I named mine tubelycdn.
+Under "Specify Origin":
+Origin type should be "Amazon S3"
+Choose your private S3 bucket as the origin
+Under "Enable Security" check "Use monitor mode"
+Create the distribution
+I'm not going to cover every possible configuration option here, read the AWS documentation if you're interested. My goal is to cover the important stuff from a conceptual standpoint.
+
+Behind the scenes, creating the distribution through the UI also updates the S3 bucket policy to allow the newly created distribution to access files in the bucket. If you want to check the new policy, go back to your S3 bucket, click on the "Permissions" tab, and look for "Bucket Policy".
+Manually find an object in your S3 bucket (upload one if you don't have one). Copy the object's URL and paste it into your browser: it should give you a permissions error. Good! That means your bucket can't be accessed directly.
+Go back to CloudFront and copy your distribution's domain name. It should look something like this: <https://dkdi1medkine9a.cloudfront.net>. Update the URL of the object you pasted into your browser to use the CloudFront domain instead of the S3 domain, which may take a minute to update. It should look something like this when you're done: <https://dkdi1medkine9a.cloudfront.net/landscape/5n4K7uoEJ-dffddffdfsdfsdf.mp4>. You should be able to load that URL in the browser and see the object! Congrats, you're hitting an edge server now!
+Run and submit the CLI tests after ensuring that the distribution is fully deployed (you might be able to access the object while CloudFront is still deploying the distribution to all edge locations).
+
+# 7.3 Use CloudFront
+
+Now that we have a cloudfront distribution that sits in front of our private S3 bucket, let's strip out all that signed URL stuff.
+
+Signed URLs are useful for truly private content, but if all you need is more protection and control over files that you want to make publicly accessible, a CDN is a better choice. CDN's like CloudFront not only offer better security than serving files directly from S3 (due to more granular controls, firewalls, and DDoS protection), but they also offer better performance.
+
+Assignment
+Remove all the logic in Tubely related to signing URLs
+Remove generatePresignedURL function and all references to it
+Remove the dbVideoToSignedVideo method and all references to it
+In handlerUploadVideo don't store the bucket and key as comma separated values in the video_url field.
+Store an actual URL again in the video_url column, but this time, use the cloudfront URL. Use your distribution's domain name (including the https:// protocol), and then dynamically inject the S3 object's key. Set the distribution's domain name in your .env and grab it from the apiConfig's s3CfDistribution field.
+Ensure your Tubely account only has a single video uploaded, and that it's the vertical one.
+
+# 7.4 Invalidations
+
+A CDN is a massive, globally distributed cache. Sure, we get massive performance improvements, because users that are geographically close to an edge server can download assets much faster than if they had to travel to the origin server.
+
+But what happens when we update an asset? How long does it take the edge servers to update their versions? The answer is: it depends. That's always the tradeoff with cache - you need to deal with invalidations. Luckily CloudFront makes it fairly easy to force invalidations of the cache.
+
+Assignment
+Navigate to your CloudFront distribution in the AWS console and click on the "Invalidations" tab.
+An invalidation is a request to remove an object from the cache. That means the next time a user requests the object, the edge server will have to go back to the origin server to get the latest version. That means it will be slower for the first user, but fast again for subsequent users.
+
+You already know what stale caches look like, so I'll spare you the demonstration. But just know that if you're having issues with stale content, creating an invalidation is the way to fix it. Let's create one, just for fun.
+
+Create an invalidation for the /landscape/* path. This will remove all objects in the /landscape/ directory from the cache.
+Run aws cloudfront list-invalidations --distribution-id YOUR_DISTRIBUTION_ID to see the status of your invalidation
+Once it's in a Completed state, run it again, but redirect the output to a temporary file:
+aws cloudfront list-invalidations --distribution-id YOUR_DISTRIBUTION_ID > /tmp/invalidations.json
+
+# 7.5 Why CDNs?
+
+A CDN like CloudFront has two purposes (as far as the context of this course is concerned):
+
+Speed: Users get content from the server closest to them, which is faster than getting it from the origin server.
+Security: The origin server is hidden from the public internet, and only the CDN can access it. This is a security measure that can help prevent DDoS attacks and other malicious activity.
+Some CDNs, like CloudFlare, (not to be confused with CloudFront) are known for their incredibly robust security features. Things like DDoS protection, Web Application Firewalls, etc.
+
+What Do CDNs Serve?
+Images and videos are certainly common, but in reality any static asset is a good fit for a CDN. Here at Boot.dev, we use CloudFlare's CDN to serve the static assets for our frontend:
+
+Images
+HTML
+CSS
+JS
+We deploy on their edge network, which means that our users get the initial HTML document quickly. That said, our backend server is a Go application running in a single region in the United States, so any dynamic requests to our API still have to come all the way back to the US.
+
+
+d1rm3m3s5yf7gx.cloudfront.net
+
+
+https://d1rm3m3s5yf7gx.cloudfront.net/portrait/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA.mp4
+
+
+invalidation:
+IBDQ217JNBIPGUYJLR619XQ6L5
+
+
+
+aws cloudfront list-invalidations --distribution-id E28WS740TRONAK > /tmp/invalidations.json
+
+
+
+aws cloudfront list-invalidations --distribution-id E28WS740TRONAK
+
+
+
