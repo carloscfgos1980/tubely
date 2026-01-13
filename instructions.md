@@ -1167,4 +1167,90 @@ aws cloudfront list-invalidations --distribution-id E28WS740TRONAK > /tmp/invali
 aws cloudfront list-invalidations --distribution-id E28WS740TRONAK
 
 
+## Resiliency
 
+# 8.1 Availability
+
+Click to hide video
+
+I mentioned earlier that one of the big advantages of "serverless" (and in particular, S3) is that it takes care of a lot of the "IT ops" work that traditionally engineers at every company had to homebrew.
+
+One of those is availability: how often your service is up and running, serving user requests. It's often measured in "nines" - like "three nines" (99.9%) or "five nines" (99.999%).
+
+See, users don't like when they log into your web app and stuff isn't loading. They don't like to hear that you're "down for maintenance".
+
+AWS and S3 aren't perfect - but they are really good at availability. When AWS has outages, it's big news. Partly because so much of the internet runs on AWS, but also because they're rare.
+
+You could build your own cluster of servers with better than or equal to one of the large cloud provider's availability. But it's very hard, and very expensive.
+
+# 8.2 Reliability
+
+Okay, so let's say you've got 5 9's of availability. That's 99.999% uptime. Pretty solid. But what about reliability?
+
+Reliability is about how well your system works when it's up. For example, maybe your server is responding to HTTP requests, but it's returning erroneous data because some dependency is down. That's not reliable.
+
+The reliability of S3 is very high out of the box.
+
+# 8.3 Durability
+
+Durability is the last in the resiliency trifecta:
+
+Availability
+Reliability
+Durability
+It's about how well your data survives in the event of an outage. For example, let's say you're running your own single server:
+
+What happens if the intern accidentally rm -rfs the user_pics directory?
+What happens if the server's hard drive fails?
+What happens if the data center it's in catches fire?
+These are all durability questions. Durability is primarily about backups and redundancy. In the case of S3, it automatically replicates your data across multiple servers. If one goes down, the backups are there.
+
+According to these docs S3's standard storage provides 99.999999999% durability and 99.99% availability of objects over a given year. Nice.
+
+# 8.4 Bucket Versioning
+
+By default, S3 does not store multiple versions of an object. If you upload a file to a key that already contains an object, the old object is overwritten.
+
+Bucket versioning is an optional feature where the bucket stores multiple versions of an object. It helps:
+
+Prevent accidental deletion
+Rollback to previous versions of files
+Store multiple versions of files in the same key
+On that last point, I recommend primarily using object versions for "just-in-case" purposes, not for expected day-to-day versioning. If you have an application that stores multiple versions of the "same" object, I would probably store them in different keys entirely. If I write a bug, I don't want to screw up my "user's versions"... I prefer my infrastructure-level backups to only be used for disaster recovery.
+Assignment
+Enable versioning on your public bucket.
+Make a copy of boots-image-horizontal.png locally called bootsimg.png.
+Upload bootsimg.png to the root of your public bucket.
+Open the image in the browser using its public URL - confirm that it's the horizontal image.
+Delete the local bootsimg.png file, and now make a copy of boots-image-vertical.png locally called bootsimg.png.
+Upload bootsimg.png to the root of your public bucket. You should see that it doesn't create a new object. Instead, click on the bootsimg.png object and go to the "Versions" tab - you should see two versions!
+Open the image in the browser using its public URL - confirm that it's the vertical image now (you might need to hard refresh and clear the cache).
+Run the following to list the versions of the object:
+aws s3api list-object-versions --bucket BUCKET --prefix bootsimg.png --no-cli-pager
+
+Replace BUCKET with your bucket name.
+
+Run it again, but redirect the output to a file:
+aws s3api list-object-versions --bucket BUCKET --prefix bootsimg.png --no-cli-pager > /tmp/versions.json
+
+Run and submit the CLI tests.
+
+If you're interested, go delete the latest version using the web console. You should be able to see the old version again when visiting the public URL! Very handy for rolling back changes.
+
+
+aws s3api list-object-versions --bucket tubely-2019 --prefix bootsimg.png --no-cli-pager
+
+
+aws s3api list-object-versions --bucket tubely-2019 --prefix bootsimg.png --no-cli-pager > /tmp/versions.json
+
+
+# 8.5 Delete
+
+Delete all the resources that you created in AWS to avoid any charges! To recap, you should have created:
+
+A CloudFront distribution
+A couple IAM custom policies
+An IAM role
+An IAM user group, user and access keys
+A couple of S3 buckets
+Congratulations on completing the course!
